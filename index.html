@@ -18,6 +18,8 @@
 html{background:var(--bg)}
 body{margin:0;background:transparent!important}
 .app{background:var(--bg)}
+/* Home Screen mode: iOS runs the view to the bottom edge, so lift the tab bar above the home bar. */
+html.standalone .tabs{padding-bottom:max(env(safe-area-inset-bottom, 0px), 28px)}
 /* Pin the app to the real screen edges. Height chains (100%, 100vh) misreport the screen in iOS Home Screen mode. */
 .app{position:fixed!important;top:env(safe-area-inset-top,0px);bottom:env(safe-area-inset-bottom,0px);left:0;right:0;height:auto!important;width:100%;margin:0 auto}
 [hidden]{display:none!important}
@@ -320,7 +322,7 @@ textarea.sum{width:100%;min-height:180px;border-radius:11px;border:1.5px solid v
       <button class="btn danger" id="reset-btn" data-act="reset" data-confirm>Clear and start new</button>
     </div>
     <textarea class="sum" id="sum" readonly hidden aria-label="Code summary"></textarea>
-    <p class="fine">Version 1.0.4. Not validated for patient care. Doses and prompts need clinical review. No patient identifiers are stored; this record stays on this device.</p>
+    <p class="fine">Not validated for patient care. Doses and prompts need clinical review. No patient identifiers are stored; this record stays on this device.</p>
     <p class="fine" id="diag"></p>
   </section>
 
@@ -870,8 +872,9 @@ var ua = navigator.userAgent || '', isIOS = /iPhone|iPad|iPod/.test(ua) || (/Mac
 if(!standalone && (isIOS || isAndroid)){ $('inst').hidden = false; $('inst-ios').hidden = !isIOS; $('inst-android').hidden = isIOS; }
 /* Screen numbers, shown in the Log tab, to diagnose layout problems on a given phone. */
 function diag(){ var el = document.getElementById('diag'); if(!el) return;
-  el.textContent = 'Version 1.0.4 · screen ' + screen.width + 'x' + screen.height + ' · view ' + window.innerWidth + 'x' + window.innerHeight + (standalone ? ' · home screen' : ' · browser'); }
+  el.textContent = 'Version 1.0.5 · screen ' + screen.width + 'x' + screen.height + ' · view ' + window.innerWidth + 'x' + window.innerHeight + (standalone ? ' · home screen' : ' · browser'); }
 window.addEventListener('resize', diag);
+if(standalone) document.documentElement.classList.add('standalone');
 boot({}); diag();
 if('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost')){
   window.addEventListener('load', function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); });

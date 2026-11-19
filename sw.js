@@ -2,7 +2,7 @@
    Bump VERSION on every release so phones fetch the new files.
    Strategy: the page loads fresh when online (falls back to the cached copy offline);
    other files serve from cache and refresh in the background. */
-var VERSION = '1.0.4';
+var VERSION = '1.0.5';
 var CACHE = 'code-blue-' + VERSION;
 var FILES = ['./', 'index.html', 'jspdf.umd.min.js', 'manifest.webmanifest', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'];
 self.addEventListener('install', function(e){
