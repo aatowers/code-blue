@@ -2,7 +2,7 @@
    Bump VERSION on every release so phones fetch the new files.
    Strategy: serve from cache instantly (works offline), refresh the cache in the
    background, and the new version appears the next time the app is opened. */
-var VERSION = '1.0.2';
+var VERSION = '1.0.3';
 var CACHE = 'code-blue-' + VERSION;
 var FILES = ['./', 'index.html', 'jspdf.umd.min.js', 'manifest.webmanifest', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'];
 self.addEventListener('install', function(e){
