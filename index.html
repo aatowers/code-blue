@@ -7,15 +7,17 @@
 <meta name="theme-color" content="#0f1620">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Code Blue">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <title>Code Blue Companion</title>
 <style>
-html{height:100%;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:var(--bg)}
+html{background:var(--bg)}
 body{margin:0}
+/* Pin the app to the real screen edges. Height chains (100%, 100vh) misreport the screen in iOS Home Screen mode. */
+.app{position:fixed!important;top:env(safe-area-inset-top,0px);bottom:env(safe-area-inset-bottom,0px);left:0;right:0;height:auto!important;width:100%;margin:0 auto}
 [hidden]{display:none!important}
 /* Layout: one-screen instrument panel. Timers on top, one rule-driven prompt,
    rhythm row, large action pads, tab bar at the thumb. System fonts only so it
@@ -316,7 +318,7 @@ textarea.sum{width:100%;min-height:180px;border-radius:11px;border:1.5px solid v
       <button class="btn danger" id="reset-btn" data-act="reset" data-confirm>Clear and start new</button>
     </div>
     <textarea class="sum" id="sum" readonly hidden aria-label="Code summary"></textarea>
-    <p class="fine">Version 1.0.0. Not validated for patient care. Doses and prompts need clinical review. No patient identifiers are stored; this record stays on this device.</p>
+    <p class="fine">Version 1.0.1. Not validated for patient care. Doses and prompts need clinical review. No patient identifiers are stored; this record stays on this device.</p>
   </section>
 
   <div class="inst gut" id="inst" role="dialog" aria-modal="true" aria-labelledby="inst-h" hidden>
