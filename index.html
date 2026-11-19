@@ -318,7 +318,7 @@ textarea.sum{width:100%;min-height:180px;border-radius:11px;border:1.5px solid v
       <button class="btn danger" id="reset-btn" data-act="reset" data-confirm>Clear and start new</button>
     </div>
     <textarea class="sum" id="sum" readonly hidden aria-label="Code summary"></textarea>
-    <p class="fine">Version 1.0.1. Not validated for patient care. Doses and prompts need clinical review. No patient identifiers are stored; this record stays on this device.</p>
+    <p class="fine">Version 1.0.2. Not validated for patient care. Doses and prompts need clinical review. No patient identifiers are stored; this record stays on this device.</p>
   </section>
 
   <div class="inst gut" id="inst" role="dialog" aria-modal="true" aria-labelledby="inst-h" hidden>
@@ -865,6 +865,17 @@ function boot(d){ if(d && d.state && d.state.events) state = Object.assign(fresh
 var standalone = window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
 var ua = navigator.userAgent || '', isIOS = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1), isAndroid = /Android/.test(ua);
 if(!standalone && (isIOS || isAndroid)){ $('inst').hidden = false; $('inst-ios').hidden = !isIOS; $('inst-android').hidden = isIOS; }
+/* iOS Home Screen bug (WebKit 301994 and related): some iOS versions report the screen
+   as shorter by the status bar height, leaving a blank band under the tab bar. Measure the
+   shortfall and stretch the app down by that amount. Skipped in landscape or with the keyboard up. */
+function fitScreen(){
+  if(!standalone) return;
+  var ae = document.activeElement; if(ae && (ae.tagName==='INPUT' || ae.tagName==='SELECT' || ae.tagName==='TEXTAREA')) return;
+  var app = document.querySelector('.app'), sh = Math.max(screen.height, screen.width), gap = sh - window.innerHeight;
+  if(window.innerHeight < window.innerWidth) gap = 0;
+  app.style.bottom = (gap > 0 && gap <= 120) ? 'calc(env(safe-area-inset-bottom, 0px) - ' + gap + 'px)' : '';
+}
+fitScreen(); window.addEventListener('resize', fitScreen); window.addEventListener('orientationchange', function(){ setTimeout(fitScreen, 300); });
 boot({});
 if('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost')){
   window.addEventListener('load', function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); });
