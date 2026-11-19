@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Free, open-source code blue companion for licensed clinicians: ACLS prompts, timers, and med logging.">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#141a22" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#eef1f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#090d12" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -15,11 +15,9 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <title>Code Blue Companion</title>
 <style>
-html{background:var(--surface)}
+html{background:var(--bg)}
 body{margin:0;background:transparent!important}
 .app{background:var(--bg)}
-/* Home Screen mode: clear the frosted band under the clock. */
-html.standalone .top{padding-top:30px}
 /* Pin the app to the real screen edges. Height chains (100%, 100vh) misreport the screen in iOS Home Screen mode. */
 .app{position:fixed!important;top:env(safe-area-inset-top,0px);bottom:env(safe-area-inset-bottom,0px);left:0;right:0;height:auto!important;width:100%;margin:0 auto}
 [hidden]{display:none!important}
@@ -322,7 +320,8 @@ textarea.sum{width:100%;min-height:180px;border-radius:11px;border:1.5px solid v
       <button class="btn danger" id="reset-btn" data-act="reset" data-confirm>Clear and start new</button>
     </div>
     <textarea class="sum" id="sum" readonly hidden aria-label="Code summary"></textarea>
-    <p class="fine">Version 1.0.3. Not validated for patient care. Doses and prompts need clinical review. No patient identifiers are stored; this record stays on this device.</p>
+    <p class="fine">Version 1.0.4. Not validated for patient care. Doses and prompts need clinical review. No patient identifiers are stored; this record stays on this device.</p>
+    <p class="fine" id="diag"></p>
   </section>
 
   <div class="inst gut" id="inst" role="dialog" aria-modal="true" aria-labelledby="inst-h" hidden>
@@ -869,20 +868,11 @@ function boot(d){ if(d && d.state && d.state.events) state = Object.assign(fresh
 var standalone = window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
 var ua = navigator.userAgent || '', isIOS = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1), isAndroid = /Android/.test(ua);
 if(!standalone && (isIOS || isAndroid)){ $('inst').hidden = false; $('inst-ios').hidden = !isIOS; $('inst-android').hidden = isIOS; }
-/* iOS Home Screen bug (WebKit 301994 and related): some iOS versions report the screen
-   as shorter by the status bar height and paint a strip over the bottom that the page cannot
-   draw into. Detect the shortfall and end the layout right above that strip. Skipped in landscape or with the keyboard up. */
-function fitScreen(){
-  if(!standalone) return;
-  document.documentElement.classList.add('standalone');
-  var ae = document.activeElement; if(ae && (ae.tagName==='INPUT' || ae.tagName==='SELECT' || ae.tagName==='TEXTAREA')) return;
-  var app = document.querySelector('.app'), sh = Math.max(screen.height, screen.width), gap = sh - window.innerHeight;
-  if(window.innerHeight < window.innerWidth) gap = 0;
-  /* When iOS paints its own strip over the bottom, end the app exactly above it. That strip already clears the home bar. */
-  app.style.bottom = (gap > 0 && gap <= 120) ? '0px' : '';
-}
-fitScreen(); window.addEventListener('resize', fitScreen); window.addEventListener('orientationchange', function(){ setTimeout(fitScreen, 300); });
-boot({});
+/* Screen numbers, shown in the Log tab, to diagnose layout problems on a given phone. */
+function diag(){ var el = document.getElementById('diag'); if(!el) return;
+  el.textContent = 'Version 1.0.4 · screen ' + screen.width + 'x' + screen.height + ' · view ' + window.innerWidth + 'x' + window.innerHeight + (standalone ? ' · home screen' : ' · browser'); }
+window.addEventListener('resize', diag);
+boot({}); diag();
 if('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost')){
   window.addEventListener('load', function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); });
 }
