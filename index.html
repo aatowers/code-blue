@@ -1,0 +1,871 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Free, open-source code blue companion for licensed clinicians: ACLS prompts, timers, and med logging.">
+<meta name="theme-color" content="#0f1620">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Code Blue">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<title>Code Blue Companion</title>
+<style>
+html{height:100%;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);background:var(--bg)}
+body{margin:0}
+[hidden]{display:none!important}
+/* Layout: one-screen instrument panel. Timers on top, one rule-driven prompt,
+   rhythm row, large action pads, tab bar at the thumb. System fonts only so it
+   renders instantly with no network. */
+:root{
+  --bg:#eef1f5; --surface:#ffffff; --sunk:#e3e8ee; --ink:#0f1620; --muted:#566373; --line:#cfd6df;
+  --accent:#1c5bd0; --crit:#c5261b; --warn:#a85f00; --ok:#16774a; --on-solid:#ffffff;
+  --num: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --text: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#090d12; --surface:#141a22; --sunk:#1c242e; --ink:#eef2f6; --muted:#93a0b0; --line:#2a3440;
+    --accent:#72a4ff; --crit:#ff5b4e; --warn:#ffb13d; --ok:#3fd08a; --on-solid:#0a0e13; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#090d12; --surface:#141a22; --sunk:#1c242e; --ink:#eef2f6; --muted:#93a0b0; --line:#2a3440;
+  --accent:#72a4ff; --crit:#ff5b4e; --warn:#ffb13d; --ok:#3fd08a; --on-solid:#0a0e13; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--text);font-size:15px;line-height:1.35;
+  overflow:hidden;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+  user-select:none;-webkit-user-select:none;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button:disabled{opacity:.38;cursor:default}
+
+.app{height:100%;max-width:540px;margin:0 auto;display:flex;flex-direction:column;position:relative}
+.gut{padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px))}
+
+.top{display:flex;align-items:center;gap:10px;padding-block:10px 8px}
+.top h1{font-size:15px;font-weight:700;margin:0;letter-spacing:.01em}
+.status{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:4px 9px;border-radius:99px;
+  background:var(--sunk);color:var(--muted)}
+.status[data-s="cpr"]{background:var(--crit);color:var(--on-solid)}
+.status[data-s="rosc"]{background:var(--ok);color:var(--on-solid)}
+.top .sp{flex:1}
+.icon{border:1px solid var(--line);background:var(--surface);border-radius:10px;min-height:36px;padding:0 12px;font-size:13px;font-weight:600}
+
+.view{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-block:4px 16px;
+  display:flex;flex-direction:column;gap:12px}
+
+/* timers */
+.timers{display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:8px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:8px 10px 10px;min-width:0;
+  position:relative;overflow:hidden}
+.tile .lab{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.tile .val{font-family:var(--num);font-variant-numeric:tabular-nums;font-weight:700;font-size:30px;line-height:1.1;margin-top:2px}
+.tile.main .val{font-size:38px}
+.tile .bar{position:absolute;left:0;bottom:0;height:5px;background:var(--accent);width:0}
+.tile[data-s="warn"]{border-color:var(--warn)} .tile[data-s="warn"] .val{color:var(--warn)} .tile[data-s="warn"] .bar{background:var(--warn)}
+.tile[data-s="crit"]{border-color:var(--crit);background:color-mix(in srgb, var(--crit) 12%, var(--surface))}
+.tile[data-s="crit"] .val{color:var(--crit)} .tile[data-s="crit"] .bar{background:var(--crit)}
+
+/* current rhythm banner */
+.rb{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;border-radius:var(--r);padding:9px 14px;border:2px solid var(--line);background:var(--surface)}
+.rb .lab{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.rb b{font-size:24px;font-weight:800;line-height:1.1}
+.rb .ago{margin-left:auto;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.rb[data-r="vf"]{border-color:var(--crit);background:color-mix(in srgb, var(--crit) 12%, var(--surface))} .rb[data-r="vf"] b{color:var(--crit)}
+.rb[data-r="pea"]{border-color:var(--accent);background:color-mix(in srgb, var(--accent) 12%, var(--surface))} .rb[data-r="pea"] b{color:var(--accent)}
+.rb[data-r="rosc"]{border-color:var(--ok);background:color-mix(in srgb, var(--ok) 12%, var(--surface))} .rb[data-r="rosc"] b{color:var(--ok)}
+/* flashing frame when a rhythm check or shock is due */
+.app::after{content:"";position:absolute;inset:0;border:7px solid var(--crit);pointer-events:none;opacity:0}
+.app[data-alert="1"]::after{opacity:1;animation:flash 1s steps(1,end) infinite}
+@keyframes flash{50%{opacity:0}}
+/* prompts */
+.prompts{display:flex;flex-direction:column;gap:8px}
+.prompt{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;
+  display:flex;flex-direction:column;gap:8px}
+.prompt .t{font-weight:700;font-size:17px;text-wrap:balance}
+.prompt .s{color:var(--muted);font-size:14px}
+.prompt.first .t{font-size:22px;line-height:1.2}
+.prompt[data-l="crit"]{border-color:var(--crit);background:color-mix(in srgb, var(--crit) 13%, var(--surface))}
+.prompt[data-l="crit"] .t{color:var(--crit)}
+.prompt[data-l="warn"]{border-color:var(--warn);background:color-mix(in srgb, var(--warn) 13%, var(--surface))}
+.prompt[data-l="ok"]{border-color:var(--ok)}
+.prompt[data-l="go"]{border:2px solid var(--ok);background:color-mix(in srgb, var(--ok) 14%, var(--surface))}
+.prompt[data-l="go"] .t{color:var(--ok)}
+.gos{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:8px}
+.prompt .go{min-height:52px;padding:8px 10px;line-height:1.2;border-radius:11px;border:0;background:var(--ink);color:var(--bg);font-weight:700;font-size:16px}
+.prompt[data-l="crit"] .go{background:var(--crit);color:var(--on-solid)}
+.start{min-height:96px;border:0;border-radius:var(--r);background:var(--crit);color:var(--on-solid);font-size:26px;font-weight:800;letter-spacing:.01em}
+.fine{font-size:12px;color:var(--muted);margin:0}
+
+.sec{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:2px 0 -6px}
+
+/* rhythm row + pads */
+.rhythm{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.rhythm button{min-height:58px;border-radius:12px;border:1.5px solid var(--line);background:var(--surface);font-weight:700;font-size:15px;padding:4px}
+.rhythm button[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--bg)}
+.rhythm .rosc{border-color:var(--ok);color:var(--ok)}
+.pads{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pad{min-height:72px;border-radius:var(--r);border:1.5px solid var(--line);background:var(--surface);text-align:left;padding:10px 12px;
+  display:flex;flex-direction:column;justify-content:center;gap:2px;min-width:0}
+.pad b{font-size:17px;line-height:1.15}
+.pad span{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.pad.shock{border-color:var(--crit)} .pad.shock b{color:var(--crit)}
+.pad.shock.hot{background:var(--crit)} .pad.shock.hot b,.pad.shock.hot span{color:var(--on-solid)}
+.pad.small{min-height:54px} .pad.wide{grid-column:1 / -1}
+.shockrow{grid-column:1 / -1;border:1.5px solid var(--crit);border-radius:var(--r);background:var(--surface);padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.shockrow .sl{display:flex;align-items:baseline;gap:10px} .shockrow .sl b{font-size:17px;color:var(--crit)}
+.shockrow .sl span{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.shockrow .en{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.shockrow .en button{min-height:58px;border-radius:11px;border:1.5px solid var(--crit);background:color-mix(in srgb, var(--crit) 10%, var(--surface));color:var(--crit);font-weight:800;font-size:18px}
+.shockrow.hot .en button{background:var(--crit);color:var(--on-solid)}
+.pad:active:not(:disabled),.rhythm button:active:not(:disabled),.row:active{transform:scale(.98)}
+
+/* lists */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.cause-h{display:flex;align-items:flex-start;gap:10px}
+.cause-h .n{font-weight:700;font-size:17px}
+.cause-h .c{color:var(--muted);font-size:14px}
+.cause-h > div{flex:1;min-width:0}
+.rec{font-size:14px;margin:0} .rec b{font-weight:700}
+.chk{flex:none;min-height:40px;border-radius:99px;border:1.5px solid var(--line);background:transparent;padding:0 12px;font-size:13px;font-weight:700;color:var(--muted)}
+.chk[aria-pressed="true"]{background:var(--ok);border-color:var(--ok);color:var(--on-solid)}
+.tri{display:flex;gap:8px} .tri .chk{flex:1;min-height:44px}
+.chk.po[aria-pressed="true"]{background:var(--warn);border-color:var(--warn);color:var(--on-solid)}
+.chk.ex[aria-pressed="true"]{background:var(--muted);border-color:var(--muted);color:var(--bg)}
+.card.poss{border:2px solid var(--warn)}
+.card.excl{opacity:.6} .card.excl .n{text-decoration:line-through;text-decoration-thickness:2px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{min-height:46px;border-radius:11px;border:1.5px solid var(--line);background:var(--sunk);padding:6px 12px;text-align:left;font-size:14px;font-weight:700;max-width:100%}
+.chip small{display:block;font-weight:500;color:var(--muted);font-size:12px}
+.chip em{font-style:normal;color:var(--accent);font-variant-numeric:tabular-nums}
+.rows{display:flex;flex-direction:column;gap:8px}
+.row{display:flex;align-items:center;gap:10px;min-height:62px;border-radius:var(--r);border:1.5px solid var(--line);background:var(--surface);
+  padding:8px 12px;text-align:left;width:100%}
+.row > div{flex:1;min-width:0}
+.row b{display:block;font-size:16px} .row small{display:block;color:var(--muted);font-size:13px}
+.row.running{border-color:var(--accent)}
+.cnt{flex:none;font-family:var(--num);font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;color:var(--accent);text-align:right}
+.note{display:flex;gap:8px}
+.note input,.search{flex:1;min-width:0;min-height:48px;border-radius:11px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);
+  padding:0 12px;font:inherit;font-size:16px}
+.search{flex:none;width:100%;padding-right:52px}
+.searchbox{position:relative;flex:none}
+.searchbox button{position:absolute;right:4px;top:4px;width:44px;height:40px;border:0;border-radius:9px;background:var(--sunk);color:var(--ink);font-size:22px;line-height:1}
+.custom{display:flex;flex-direction:column;gap:8px}
+.custom > input,.note select{min-height:48px;border-radius:11px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);padding:0 12px;font:inherit;font-size:16px;min-width:0}
+.note select{flex:0 1 128px}
+.hdr{font-size:19px;font-weight:800;margin:6px 0 -4px}
+.btn{min-height:48px;border-radius:11px;border:1.5px solid var(--line);background:var(--surface);padding:0 14px;font-weight:700;font-size:15px}
+.btn.solid{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.danger{border-color:var(--crit);color:var(--crit)}
+.btn.armed{background:var(--crit);color:var(--on-solid);border-color:var(--crit)}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px} .btnrow .btn{flex:1 1 150px}
+
+/* algorithm */
+#v-algo{overflow:hidden;padding-bottom:8px;gap:8px}
+.abar{display:flex;gap:6px;overflow-x:auto;flex:none;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+.abar button{flex:none;min-height:42px;border-radius:99px;border:1.5px solid var(--line);background:var(--surface);padding:0 13px;font-size:14px;font-weight:700}
+.abar .z{min-width:44px;font-size:20px;padding:0}
+.awrap{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r)}
+.awrap svg{display:block;width:100%;height:auto}
+.awrap text{font-family:var(--text);fill:var(--ink)}
+.awrap .h{font-size:17px;font-weight:700} .awrap .b{font-size:14px} .awrap .on{fill:var(--on-solid)}
+.awrap .lbl{font-size:12px;fill:var(--muted);font-weight:600} .awrap .ph{font-size:13px;font-weight:700;letter-spacing:.08em;fill:var(--muted)}
+.awrap .ln{fill:none;stroke:var(--muted);stroke-width:2} .awrap .dash{stroke-dasharray:6 5;stroke:var(--ok)}
+.awrap .ahf{fill:var(--muted)} .awrap .ahok{fill:var(--ok)}
+.n-start{fill:var(--surface);stroke:var(--ink);stroke-width:2}
+.n-check{fill:var(--sunk);stroke:var(--muted);stroke-width:1.5}
+.n-vf{fill:var(--crit);stroke:var(--crit);stroke-width:1} .n-pea{fill:var(--accent);stroke:var(--accent);stroke-width:1}
+.n-shock{fill:color-mix(in srgb, var(--crit) 16%, var(--surface));stroke:var(--crit);stroke-width:2}
+.awrap .shk{fill:var(--crit)}
+.n-cpr{fill:var(--bg);stroke:var(--line);stroke-width:1.5}
+.n-rosc{fill:color-mix(in srgb, var(--ok) 12%, var(--surface));stroke:var(--ok);stroke-width:2}
+.n-panel{fill:var(--sunk);stroke:var(--line);stroke-width:1}
+.awrap .here{stroke-width:7}
+.awrap .band{fill:none;stroke:none}
+.awrap .band.on.bvf{fill:color-mix(in srgb, var(--crit) 14%, var(--surface));stroke:var(--crit);stroke-width:5}
+.awrap .band.on.bpea{fill:color-mix(in srgb, var(--accent) 14%, var(--surface));stroke:var(--accent);stroke-width:5}
+.awrap .cur{font-size:15px;font-weight:800;letter-spacing:.1em;visibility:hidden} .awrap .cur.on{visibility:visible}
+.awrap .cvf{fill:var(--crit)} .awrap .cpea{fill:var(--accent)}
+.awrap .dim{opacity:.25}
+
+/* log */
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.log li{display:grid;grid-template-columns:52px 1fr 40px;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}
+.log li:last-child{border-bottom:0}
+.log .e{font-family:var(--num);font-variant-numeric:tabular-nums;font-weight:700}
+.log .l{min-width:0} .log .l small{display:block;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.log .k-shock{color:var(--crit);font-weight:700} .log .k-med{font-weight:700} .log .k-rhythm{color:var(--accent);font-weight:700}
+.log .x{min-height:40px;border:0;background:transparent;color:var(--muted);font-size:18px}
+.empty{color:var(--muted);margin:0}
+textarea.sum{width:100%;min-height:180px;border-radius:11px;border:1.5px solid var(--line);background:var(--sunk);color:var(--ink);
+  font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;padding:10px}
+.checks{display:flex;flex-direction:column;gap:6px}
+.checks button{display:flex;gap:10px;align-items:center;min-height:46px;border:1.5px solid var(--line);border-radius:11px;background:var(--surface);
+  padding:6px 12px;text-align:left;font-size:15px}
+.checks button::before{content:"";flex:none;width:20px;height:20px;border-radius:6px;border:2px solid var(--muted)}
+.checks button[aria-pressed="true"]{border-color:var(--ok)}
+.checks button[aria-pressed="true"]::before{background:var(--ok);border-color:var(--ok)}
+
+/* first-launch agreement */
+.gate{position:absolute;inset:0;z-index:30;background:var(--bg);display:flex;flex-direction:column;padding-block:20px 16px;gap:14px}
+.gate h2{margin:0;font-size:24px;font-weight:800}
+.gate .body{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:10px;font-size:15px}
+.gate p{margin:0} .gate ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
+.gate .agree{flex:none;min-height:60px;border:0;border-radius:var(--r);background:var(--ink);color:var(--bg);font-size:19px;font-weight:800}
+/* install screen (browser only) */
+.inst{position:absolute;inset:0;z-index:40;background:var(--bg);display:flex;flex-direction:column;gap:16px;padding-block:24px 16px;overflow-y:auto}
+.inst h2{margin:0;font-size:26px;font-weight:800}
+.inst p{margin:0;font-size:16px;color:var(--muted)}
+.inst ol{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px;counter-reset:s}
+.inst li{counter-increment:s;display:flex;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;font-size:17px}
+.inst li::before{content:counter(s);flex:none;width:32px;height:32px;border-radius:99px;background:var(--crit);color:var(--on-solid);font-weight:800;display:grid;place-items:center}
+.inst svg{flex:none;width:24px;height:24px;vertical-align:-5px;stroke:var(--accent);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.inst .later{margin-top:auto;min-height:52px;border:1.5px solid var(--line);border-radius:var(--r);background:transparent;font-weight:700;font-size:16px;color:var(--muted)}
+/* tabs + toast */
+.tabs{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--line);background:var(--surface);padding-block:6px}
+.tabs button{min-height:50px;border:0;background:transparent;border-radius:10px;font-weight:700;font-size:13px;color:var(--muted);padding:0 2px}
+.tabs button[aria-selected="true"]{color:var(--ink);background:var(--sunk)}
+.toast{position:absolute;left:0;right:0;bottom:74px;display:flex;justify-content:center;pointer-events:none}
+.toast > div{pointer-events:auto;display:flex;align-items:center;gap:8px;background:var(--ink);color:var(--bg);border-radius:12px;
+  padding:6px 6px 6px 14px;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.toast span{font-size:14px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-block:10px}
+.toast button{flex:none;min-height:42px;padding:0 14px;border-radius:9px;border:0;background:var(--bg);color:var(--ink);font-weight:800}
+.toast .tx{background:transparent;color:var(--bg);font-size:20px;padding:0 10px;font-weight:500}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important} .pad:active,.row:active{transform:none!important} .app[data-alert="1"]::after{animation:none} }
+</style>
+
+<div class="app">
+  <header class="top gut">
+    <h1>Code Blue Companion</h1>
+    <span class="status" id="status" data-s="idle">Idle</span>
+    <span class="sp"></span>
+  </header>
+
+  <!-- CODE -->
+  <section class="view gut" id="v-code">
+    <div class="timers">
+      <div class="tile" id="t-total"><div class="lab">Total</div><div class="val" id="tv-total">0:00</div></div>
+      <div class="tile main" id="t-cycle"><div class="lab">CPR cycle</div><div class="val" id="tv-cycle">2:00</div><div class="bar" id="tb-cycle"></div></div>
+      <div class="tile" id="t-epi"><div class="lab">Since epi</div><div class="val" id="tv-epi">--:--</div></div>
+    </div>
+    <div class="rb" id="rb" data-r=""></div>
+    <div class="prompts" id="prompts"></div>
+    <div class="sec">Rhythm check</div>
+    <div class="rhythm" id="rhythm"></div>
+    <div class="pads" id="pads"></div>
+  </section>
+
+  <!-- ALGORITHM -->
+  <section class="view gut" id="v-algo" hidden>
+    <div class="abar">
+      <button class="z" data-act="zoom:-" aria-label="Zoom out">&minus;</button>
+      <button class="z" data-act="zoom:+" aria-label="Zoom in">+</button>
+      <button data-act="sec:all">Overview</button>
+      <button data-act="sec:vf">Shockable</button>
+      <button data-act="sec:pea">Non-shockable</button>
+      <button data-act="sec:rosc">Post-ROSC</button>
+    </div>
+    <div class="awrap" id="awrap"></div>
+  </section>
+
+  <!-- CAUSES -->
+  <section class="view gut" id="v-causes" hidden>
+    <p class="fine">Reversible causes. Mark each as possible or excluded, and log treatments with one tap. These marks appear in the summary, not in the log.</p>
+    <div class="rows" id="causes"></div>
+  </section>
+
+  <!-- MEDS -->
+  <section class="view gut" id="v-meds" hidden>
+    <div class="searchbox">
+      <input class="search" id="med-search" type="text" placeholder="Find a med or indication, e.g. atropine, brady" autocomplete="off" autocapitalize="off" enterkeyhint="search" aria-label="Find a med">
+      <button id="search-x" data-act="clearsearch" aria-label="Clear search" hidden>&times;</button>
+    </div>
+    <button class="row" id="nomatch" data-act="tocustom" hidden><div><b id="nomatch-t"></b><small>Tap to log it as a custom entry. The name is already filled in below.</small></div></button>
+    <div id="medlist" style="display:flex;flex-direction:column;gap:12px"></div>
+    <div class="sec">Custom entry</div>
+    <div class="custom">
+      <input id="note-input" type="text" placeholder="Drug name" autocomplete="off" enterkeyhint="next" aria-label="Drug name">
+      <div class="note">
+        <input id="note-dose" type="text" inputmode="decimal" placeholder="Dose" autocomplete="off" enterkeyhint="done" aria-label="Dose">
+        <select id="note-unit" aria-label="Dose unit">
+          <option>mg</option><option>mcg</option><option>g</option><option>mEq</option><option>units</option><option>mL</option><option>L</option>
+          <option>mg/kg</option><option>mcg/kg</option><option>mg/min</option><option>mcg/min</option><option>mcg/kg/min</option><option>units/min</option>
+        </select>
+        <button class="btn solid" data-act="note">Log</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOG -->
+  <section class="view gut" id="v-log" hidden>
+    <div class="card" id="logcard"><ul class="log" id="log"></ul></div>
+    <div class="btnrow">
+      <button class="btn" data-act="copy">Copy summary</button>
+      <button class="btn" id="pdf-btn" data-act="pdf" hidden>Save PDF</button>
+      <button class="btn danger" id="end-btn" data-act="end:Resuscitation terminated" data-confirm>End: terminated</button>
+      <button class="btn danger" id="end-btn2" data-act="end:ROSC, care transferred" data-confirm>End: ROSC / transfer</button>
+      <button class="btn danger" id="reset-btn" data-act="reset" data-confirm>Clear and start new</button>
+    </div>
+    <textarea class="sum" id="sum" readonly hidden aria-label="Code summary"></textarea>
+    <p class="fine">Version 1.0.0. Not validated for patient care. Doses and prompts need clinical review. No patient identifiers are stored; this record stays on this device.</p>
+  </section>
+
+  <div class="inst gut" id="inst" role="dialog" aria-modal="true" aria-labelledby="inst-h" hidden>
+    <h2 id="inst-h">Install Code Blue</h2>
+    <p>Add it to your Home Screen once. It then opens like an app, works with no signal, and updates itself.</p>
+    <ol id="inst-ios">
+      <li><span>Tap the Share button <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M6 11H5v10h14V11h-1"/></svg> in Safari's toolbar. On newer iPhones, tap the three-dot menu first.</span></li>
+      <li><span>Scroll down and tap <b>Add to Home Screen</b> <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg></span></li>
+      <li><span>Tap <b>Add</b>, then open Code Blue from your Home Screen.</span></li>
+    </ol>
+    <ol id="inst-android" hidden>
+      <li><span>Tap the browser menu (three dots, top right).</span></li>
+      <li><span>Tap <b>Add to Home screen</b> or <b>Install app</b>.</span></li>
+      <li><span>Open Code Blue from your Home Screen.</span></li>
+    </ol>
+    <button class="later" data-act="instlater">Use in the browser for now</button>
+  </div>
+
+  <div class="gate gut" id="gate" role="dialog" aria-modal="true" aria-labelledby="gate-h" hidden>
+    <h2 id="gate-h">Before you start</h2>
+    <div class="body">
+      <p>Code Blue Companion is a free, open-source educational and reference tool for licensed healthcare providers trained in advanced cardiac life support.</p>
+      <ul>
+        <li>It is not a medical device and has not been reviewed or cleared by the FDA or any other regulator.</li>
+        <li>It does not replace clinical judgment, your institution's protocols, or current resuscitation guidelines. Verify every dose and step independently.</li>
+        <li>Prompts, timers, and doses may contain errors or fail. Do not rely on this app as the sole basis for any patient care decision.</li>
+        <li>It is not affiliated with or endorsed by the American Heart Association or any hospital.</li>
+        <li>Do not enter patient identifiers. Anything you log stays on this device and is not an official medical record.</li>
+        <li>The app is provided as is, with no warranty of any kind. The authors and contributors accept no liability for any use of it.</li>
+      </ul>
+      <p>By tapping I agree, you confirm that you are a licensed healthcare provider and that you accept these terms.</p>
+    </div>
+    <button class="agree" data-act="agree">I agree</button>
+  </div>
+
+  <div class="toast" id="toast" hidden><div><span id="toast-t"></span><button id="toast-undo" data-act="undo">Undo</button><button class="tx" id="toast-x" data-act="dismiss" aria-label="Dismiss">&times;</button></div></div>
+
+  <nav class="tabs gut" role="tablist">
+    <button role="tab" data-act="tab:code" aria-selected="true">Code</button>
+    <button role="tab" data-act="tab:algo" aria-selected="false">Algorithm</button>
+    <button role="tab" data-act="tab:causes" aria-selected="false">Hs &amp; Ts</button>
+    <button role="tab" data-act="tab:meds" aria-selected="false">Meds</button>
+    <button role="tab" data-act="tab:log" aria-selected="false">Log</button>
+  </nav>
+</div>
+
+<script src="jspdf.umd.min.js"></script>
+<script>
+(function(){
+'use strict';
+/* ---------- content (all doses are first-pass and need physician review) ---------- */
+var ITEMS = {
+  epi:{n:'Epinephrine',d:'1 mg IV/IO',w:'Cardiac arrest. Every 3 to 5 min',k:'med',g:'arrest'},
+  amio:{n:'Amiodarone',d:function(c){return c?'150 mg IV/IO':'300 mg IV/IO';},w:'Refractory VF/pVT. First 300 mg, second 150 mg',k:'med',g:'arrest'},
+  lido:{n:'Lidocaine',d:function(c){return c?'0.5 to 0.75 mg/kg':'1 to 1.5 mg/kg';},w:'Refractory VF/pVT. Alternative to amiodarone',k:'med',g:'arrest'},
+  atropine:{n:'Atropine',d:'1 mg IV',w:'Bradycardia. Every 3 to 5 min, max 3 mg',k:'med',g:'push'},
+  phenylpush:{n:'Phenylephrine push',d:'100 mcg IV',w:'Hypotension. 50 to 200 mcg per push, repeat every 2 to 5 min',k:'med',g:'push'},
+  cacl:{n:'Calcium chloride',d:'1 g IV (10 mL of 10%)',w:'Hyperkalemia, hypocalcemia. CCB overdose: 1 to 2 g, repeat every 10 to 20 min. Not routine in arrest',k:'med',g:'sit'},
+  cagluc:{n:'Calcium gluconate',d:'1 g IV (10 mL of 10%)',w:'Hyperkalemia, hypocalcemia. 3 g is about 1 g of calcium chloride',k:'med',g:'sit'},
+  bicarb:{n:'Sodium bicarbonate',d:'50 mEq IV (1 amp 8.4%)',w:'Hyperkalemia, severe acidosis. TCA or Na channel blocker: 50 to 150 mEq, repeat to narrow QRS; keep pH 7.55 or less, Na 155 or less. Not routine in arrest',k:'med',g:'sit'},
+  mag:{n:'Magnesium sulfate',d:'2 g IV',w:'Torsades, hypomagnesemia',k:'med',g:'sit'},
+  d50:{n:'Dextrose 50%',d:'25 g IV (1 amp)',w:'Hypoglycemia: 25 g. With insulin for hyperkalemia: 25 to 50 g. Recheck glucose',k:'med',g:'sit'},
+  insulin:{n:'Insulin regular',d:'10 units IV',w:'Hyperkalemia. Give with dextrose',k:'med',g:'sit'},
+  naloxone:{n:'Naloxone',d:'2 mg IV/IO',w:'Opioid overdose. 0.4 to 2 mg IV/IO/IM, repeat every 2 to 3 min. Intranasal 2 to 4 mg',k:'med',g:'sit'},
+  fluid:{n:'Crystalloid bolus',d:'1 L IV',w:'Hypovolemia. Volume per clinical judgment',k:'med',g:'sit'},
+  blood:{n:'pRBC (packed red blood cells)',d:'1 unit',w:'Hemorrhage. Activate MTP',k:'med',g:'sit'},
+  norepi:{n:'Norepinephrine',d:'',w:'Pressor gtt. Start 8 to 12 mcg/min (about 0.1 mcg/kg/min). Range 0.03 to 0.5 mcg/kg/min. Titrate to MAP 65. Add vasopressin at 0.25 mcg/kg/min or more',k:'gtt',g:'gtt'},
+  epigtt:{n:'Epinephrine',d:'',w:'Pressor gtt. Shock: 0.05 to 2 mcg/kg/min. Bradycardia: 2 to 10 mcg/min',k:'gtt',g:'gtt'},
+  vaso:{n:'Vasopressin',d:'',w:'Pressor gtt. Fixed dose 0.03 units/min',k:'gtt',g:'gtt'},
+  phenyl:{n:'Phenylephrine',d:'',w:'Pressor gtt. 10 to 35 mcg/min (about 0.1 to 0.5 mcg/kg/min), max 200 mcg/min',k:'gtt',g:'gtt'},
+  amiogtt:{n:'Amiodarone',d:'',w:'Antiarrhythmic gtt. 1 mg/min for 6 h, then 0.5 mg/min. Rebolus 150 mg for breakthrough VF/VT',k:'gtt',g:'gtt'},
+  lidogtt:{n:'Lidocaine',d:'',w:'Antiarrhythmic gtt. 1 to 4 mg/min',k:'gtt',g:'gtt'},
+  adenosine:{n:'Adenosine',d:function(c){return c?'12 mg rapid IV push':'6 mg rapid IV push';},w:'Stable regular narrow complex SVT. 6 mg, then 12 mg, may repeat 12 mg once. Central line or heart transplant: much lower dose. Not for unstable WCT',k:'med',g:'rare'},
+  diltiazem:{n:'Diltiazem',d:'0.25 mg/kg IV over 2 min',w:'AF or SVT rate control. About 20 mg; may give 0.35 mg/kg after 15 min. Not for wide complex tachycardia',k:'med',g:'rare'},
+  metoprolol:{n:'Metoprolol',d:'5 mg IV',w:'Rate control. 2.5 to 5 mg over 2 min, up to 3 doses',k:'med',g:'rare'},
+  esmolol:{n:'Esmolol',d:'500 mcg/kg IV over 1 min',w:'Rate control, then 50 to 300 mcg/kg/min. Refractory VF: off label, not in AHA 2025',k:'med',g:'rare'},
+  procainamide:{n:'Procainamide',d:'20 to 50 mg/min IV load',w:'Stable wide complex tachycardia. Stop for hypotension, QRS widening over 50%, or 17 mg/kg. Then 1 to 4 mg/min',k:'med',g:'rare'},
+  glucagon:{n:'Glucagon',d:'5 mg IV',w:'Beta blocker or CCB overdose. 3 to 10 mg bolus, then 3 to 5 mg/h infusion',k:'med',g:'rare'},
+  hydroxo:{n:'Hydroxocobalamin',d:'5 g IV over 15 min',w:'Cyanide toxicity, smoke inhalation. May repeat 5 g, max 10 g',k:'med',g:'rare'},
+  txa:{n:'Tranexamic acid',d:'1 g IV over 10 min',w:'Hemorrhage. Then 1 g over 8 h. Give within 3 h of injury',k:'med',g:'rare'},
+  etomidate:{n:'Etomidate',d:'0.3 mg/kg IV',w:'Intubation, induction',k:'med',g:'rare'},
+  ketamine:{n:'Ketamine',d:'1 to 2 mg/kg IV',w:'Intubation, induction',k:'med',g:'rare'},
+  roc:{n:'Rocuronium',d:'1 mg/kg IV',w:'Intubation, paralytic',k:'med',g:'rare'},
+  succ:{n:'Succinylcholine',d:'1.5 mg/kg IV',w:'Intubation, paralytic. AVOID if hyperkalemia suspected, burns, crush, denervation, myopathy',k:'med',g:'rare'},
+  midaz:{n:'Midazolam',d:'2 mg IV',w:'Sedation: 1 to 2 mg IV, repeat to effect. Seizure: 10 mg IM, or lorazepam 4 mg IV',k:'med',g:'rare'},
+  loraz:{n:'Lorazepam',d:'4 mg IV',w:'Seizure',k:'med',g:'rare'},
+  fentanyl:{n:'Fentanyl',d:'50 mcg IV',w:'Post-ROSC analgesia, sedation',k:'med',g:'rare'},
+  dobut:{n:'Dobutamine',d:'',w:'Inotrope gtt. 2 to 20 mcg/kg/min',k:'gtt',g:'rare'},
+  dopa:{n:'Dopamine',d:'',w:'Pressor gtt. 5 to 20 mcg/kg/min',k:'gtt',g:'rare'},
+  isuprel:{n:'Isoproterenol',d:'',w:'Chronotrope gtt. 1 to 20 mcg/min, bradycardia or torsades (off label)',k:'gtt',g:'rare'},
+  milrinone:{n:'Milrinone',d:'',w:'Inotrope gtt. 0.375 to 0.75 mcg/kg/min; 0.2 to 0.43 if renal impairment',k:'gtt',g:'rare'},
+  propofol:{n:'Propofol',d:'',w:'Sedation gtt. 5 to 50 mcg/kg/min',k:'gtt',g:'rare'}
+};
+var GROUPS = [['arrest','Cardiac arrest'],['push','Peri-arrest pushes'],['sit','Situational (Hs & Ts)'],['gtt','Infusions (gtts)'],['rare','Less common']];
+var CAUSES = [
+  {k:'hypovol',n:'Hypovolemia',c:'Bleeding, GI loss, sepsis. Narrow complex PEA.',a:['fluid','blood']},
+  {k:'hypoxia',n:'Hypoxia',c:'Desaturation before arrest, aspiration, mucus plug.',r:'Confirm airway position and ventilation with the airway team. 100% oxygen.',a:[]},
+  {k:'acid',n:'Hydrogen ion (acidosis)',c:'Renal failure, DKA, prolonged arrest.',r:'Check a blood gas. Ensure adequate ventilation.',a:['bicarb']},
+  {k:'k',n:'Hyperkalemia / hypokalemia',c:'Dialysis or missed HD, AKI, wide QRS, peaked T on prior ECG.',a:['cacl','cagluc','bicarb','insulin','d50','mag']},
+  {k:'hypotherm',n:'Hypothermia',c:'Found down, exposure.',r:'Check core temperature. Active rewarming.',a:[]},
+  {k:'glucose',n:'Hypoglycemia',c:'Insulin or sulfonylurea use, poor intake.',r:'Check fingerstick glucose.',a:['d50']},
+  {k:'tension',n:'Tension pneumothorax',c:'Absent breath sounds, hard to bag, recent line or ventilator.',r:'Needle or finger decompression, then chest tube.',a:[]},
+  {k:'tamponade',n:'Tamponade',c:'Recent cardiac procedure, malignancy, uremia.',r:'Bedside echo. Pericardiocentesis.',a:[]},
+  {k:'toxins',n:'Toxins',c:'Opioids, TCA, beta blocker or CCB, digoxin.',r:'Poison control for specific antidotes.',a:['naloxone','bicarb','cacl']},
+  {k:'pe',n:'Thrombosis, pulmonary',c:'DVT, immobility, recent surgery.',r:'Bedside echo for RV strain. Discuss thrombolysis or PE response team.',a:[]},
+  {k:'mi',n:'Thrombosis, coronary',c:'Chest pain before arrest, ST changes, refractory VF.',r:'Cath lab activation after ROSC. ECPR where available.',a:[]}
+];
+var ROSC_CHECKS = ['12-lead ECG','Airway secure, SpO2 90 to 98%, PaCO2 35 to 45, avoid hyperventilation','MAP 65 or higher: fluids, vasopressors',
+  'Labs, blood gas, lactate, glucose','Targeted temperature management if not following commands: goal 32 to 37.5 °C, at least 36 h','Cath lab if STEMI or suspected coronary cause','ICU handoff'];
+var ROSC_MEDS = ['norepi','epigtt','vaso','phenyl','amiogtt','lidogtt','atropine','phenylpush'];
+var RH = {vf:'VF / pVT',pea:'PEA',asystole:'Asystole'};
+var CYCLE = 120000, EPI_DUE = 180000, EPI_LATE = 300000, KEY = 'cbc-state-v2';
+
+/* ---------- state: the event list is the source of truth; rhythm, phase and timers are derived from it ---------- */
+function fresh(){ return {phase:'idle',startedAt:0,endedAt:0,outcome:'',rhythm:null,needShock:false,cycleStart:0,events:[],causes:{},rosc:{},muted:false,seq:0}; }
+var state = fresh(), prev = null, tab = 'code', toastTimer = 0, armed = null, armTimer = 0, lastSig = '';
+var warnedFor = 0, dueFor = 0, autoName = false;
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){} }
+function load(){ try{ var s = JSON.parse(localStorage.getItem(KEY)); if(s && s.events) state = Object.assign(fresh(), s); }catch(e){} }
+function derive(){
+  var s = state, n = 0;
+  s.phase = 'idle'; s.rhythm = null; s.needShock = false; s.cycleStart = 0; s.endedAt = 0; s.outcome = '';
+  s.events.forEach(function(e){
+    if(e.type==='system'){
+      if(e.key==='start'){ s.phase='cpr'; s.cycleStart=e.t; }
+      else if(e.key==='cycle'){ s.cycleStart=e.t; s.needShock=false; }
+      else if(e.key==='rearrest'){ s.phase='cpr'; s.rhythm=null; s.needShock=false; s.cycleStart=e.t; }
+      else if(e.key==='end'){ s.phase='ended'; s.endedAt=e.t; s.outcome=e.o||''; s.needShock=false; }
+    } else if(e.type==='rhythm'){
+      if(e.key==='rosc'){ s.phase='rosc'; s.needShock=false; }
+      else if(e.key==='vf'){ s.rhythm='vf'; s.needShock=true; }
+      else { s.rhythm=e.key; s.needShock=false; s.cycleStart=e.t; }
+    } else if(e.type==='shock'){
+      n++; e.label='Shock #'+n+' delivered'+(e.j?', '+e.j+' J':''); s.needShock=false; if(!s.rhythm) s.rhythm='vf'; s.cycleStart=e.t;
+    }
+  });
+}
+function fmt(ms){ ms = Math.max(0, ms); var s = Math.floor(ms/1000), m = Math.floor(s/60); s = s%60; return m + ':' + (s<10?'0':'') + s; }
+function clock(t){ var d = new Date(t), p = function(n){return (n<10?'0':'')+n;}; return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds()); }
+function count(type){ var n=0; state.events.forEach(function(e){ if(e.type===type) n++; }); return n; }
+function itemCount(key){ var n=0; state.events.forEach(function(e){ if(e.key===key && e.type==='med') n++; }); return n; }
+function lastT(key){ for(var i=state.events.length-1;i>=0;i--){ if(state.events[i].key===key && state.events[i].type==='med') return state.events[i].t; } return 0; }
+function running(key){ return itemCount(key)%2===1; }
+function push(type,key,label){ var e = {id:++state.seq,t:Date.now(),type:type,key:key||'',label:label}; state.events.push(e); return e; }
+function mutate(fn,msg){ prev = JSON.stringify(state); fn(); derive(); save(); renderAll(); if(msg) toast(msg,true); else hideToast(); }
+function dose(key){ var it = ITEMS[key]; return typeof it.d==='function' ? it.d(itemCount(key)) : it.d; }
+function labelFor(key){ var it = ITEMS[key]; if(it.k==='gtt') return it.n + ' infusion ' + (running(key)?'stopped':'started'); var d = dose(key); return it.n + (d ? ' ' + d : ''); }
+function active(){ return state.phase==='cpr' || state.phase==='rosc'; }
+
+/* ---------- prompt rules ---------- */
+function prompts(now){
+  var p = [], s = state;
+  if(s.phase!=='cpr') return p;
+  var el = now - s.startedAt, cyc = now - s.cycleStart, shocks = count('shock'), epiN = itemCount('epi');
+  var shockable = s.rhythm==='vf', aa = itemCount('amio') + itemCount('lido');
+  if(s.needShock) p.push({l:'crit',t:'Shock now',s:'Tap the energy used. Resume CPR immediately after the shock.',btns:[{a:'shock:200',b:'200 J'},{a:'shock:300',b:'300 J'},{a:'shock:360',b:'360 J'}]});
+  else if(!s.rhythm && !shocks) p.push({l:'info',t:'High-quality CPR. Attach pads. Identify rhythm.',s:'Select the rhythm below at the first check.'});
+  var rt = 0;
+  s.events.forEach(function(e){ if(e.type==='shock' || (e.type==='rhythm' && (e.key==='pea'||e.key==='asystole'))) rt = e.t; });
+  if(!s.needShock && rt && now-rt<20000) p.push({l:'go',t:'Resume CPR now',s:'Minimize the pause. Next rhythm check in 2 minutes.'});
+  if(!s.needShock){
+    if(cyc>=CYCLE) p.push({l:'crit',t:'Rhythm check now',s:'Pause under 10 seconds. Select the rhythm below. Switch compressor.'});
+    else if(cyc>=CYCLE-15000) p.push({l:'warn',t:'Rhythm check in under 15 seconds',s:'Pre-charge the defibrillator. Line up the next compressor.'});
+  }
+  if(epiN===0){
+    if(s.rhythm && !shockable) p.push({l:'warn',t:'Epinephrine 1 mg now',s:'Non-shockable rhythm. Give as soon as access is available.',a:'give:epi',b:'Epinephrine given'});
+    else if(shockable && shocks>=2) p.push({l:'warn',t:'Epinephrine 1 mg',s:'Due after the 2nd shock.',a:'give:epi',b:'Epinephrine given'});
+  } else {
+    var since = now - lastT('epi');
+    if(since>=EPI_LATE) p.push({l:'crit',t:'Epinephrine overdue',s:'More than 5 minutes since the last dose.',a:'give:epi',b:'Epinephrine given'});
+    else if(since>=EPI_DUE) p.push({l:'warn',t:'Epinephrine due',s:'In the 3 to 5 minute window since the last dose.',a:'give:epi',b:'Epinephrine given'});
+  }
+  if(shockable && shocks>=3 && aa===0) p.push({l:'warn',t:'Antiarrhythmic',s:'VF/pVT after 3 shocks. Tap the one given.',btns:[{a:'give:amio',b:'Amiodarone 300 mg'},{a:'give:lido',b:'Lidocaine 1 to 1.5 mg/kg'}]});
+  else if(shockable && aa>=1){
+    var first = Math.max(lastT('amio'), lastT('lido')), after = 0, an = itemCount('amio'), lnn = itemCount('lido'), ab = [];
+    s.events.forEach(function(e){ if(e.type==='shock' && e.t>first) after++; });
+    if(an<2) ab.push({a:'give:amio',b:'Amiodarone '+(an?'150':'300')+' mg'});
+    ab.push({a:'give:lido',b:'Lidocaine '+(lnn?'0.5 to 0.75':'1 to 1.5')+' mg/kg'});
+    if(after>=2) p.push({l:'info',t:'Consider another antiarrhythmic dose',s:'VF/pVT persists after 2 more shocks. Tap the one given.',btns:ab});
+  }
+  if(shockable && shocks>=5) p.push({l:'info',t:'Refractory VF/pVT',s:'Consider changing pad position, magnesium if torsades, coronary cause.'});
+  if(!Object.keys(s.causes).length && ((s.rhythm && !shockable) || el>=360000)) p.push({l:'info',t:'Review reversible causes',s:'Hs and Ts, with situational meds.',a:'tab:causes',b:'Open Hs & Ts'});
+  if(el>=1200000) p.push({l:'info',t:'20 minutes elapsed',s:'Reassess reversible causes, ETCO2, and goals of resuscitation.'});
+  var o = {crit:0,go:1,warn:2,info:3};
+  return p.map(function(x,i){ x.i=i; return x; }).sort(function(a,b){ return (o[a.l]-o[b.l]) || (a.i-b.i); });
+}
+
+/* ---------- render ---------- */
+function chip(key){
+  var it = ITEMS[key], n = itemCount(key), d = dose(key), g = it.k==='gtt';
+  return '<button class="chip" data-act="give:'+key+'">'+esc(it.n)+(g?' gtt':'')+(g ? (running(key)?' <em>running</em>':'') : (n?' <em>x'+n+'</em>':''))+
+    (g?'<small>'+(running(key)?'Tap to stop':'Tap to start')+'</small>':(d?'<small>'+esc(d)+'</small>':''))+'</button>';
+}
+function renderPrompts(){
+  var el = $('prompts'), h = '';
+  if(state.phase==='idle'){
+    h = '<button class="start" data-act="start">Start code</button>'+
+        '<p class="fine">Starts the clock and the first 2 minute CPR cycle. Prompts follow the rhythm you select. Every tap is timestamped and can be undone.</p>';
+  } else if(state.phase==='rosc'){
+    h = '<div class="prompt first" data-l="ok"><div class="t">ROSC. Post-arrest care</div><div class="checks">'+
+      ROSC_CHECKS.map(function(c,i){ return '<button data-act="rc:'+i+'" aria-pressed="'+(!!state.rosc[i])+'">'+esc(c)+'</button>'; }).join('')+
+      '</div><div class="s">Post-ROSC meds</div><div class="chips">'+ROSC_MEDS.map(chip).join('')+'</div>'+
+      '<button class="go" data-act="rearrest">Re-arrest: resume CPR</button></div>';
+  } else if(state.phase==='ended'){
+    h = '<div class="prompt first"><div class="t">Code ended</div><div class="s">'+esc(state.outcome)+'. Duration '+fmt(state.endedAt-state.startedAt)+
+      '.</div><button class="go" data-act="tab:log">View log and summary</button></div>';
+  } else {
+    var ps = prompts(Date.now()).slice(0,4);
+    if(!ps.length) ps = [{l:'info',t:'Continue CPR',s:'Rate 100 to 120 per minute, depth 2 to 2.4 inches, full recoil. Minimize pauses. With advanced airway, 1 breath every 6 seconds.'}];
+    h = ps.map(function(p,i){
+      var bs = p.btns || (p.a ? [{a:p.a,b:p.b}] : []);
+      return '<div class="prompt'+(i===0?' first':'')+'" data-l="'+p.l+'"><div class="t">'+esc(p.t)+'</div>'+(p.s?'<div class="s">'+esc(p.s)+'</div>':'')+
+        (bs.length?'<div class="gos">'+bs.map(function(b){return '<button class="go" data-act="'+b.a+'">'+esc(b.b)+'</button>';}).join('')+'</div>':'')+'</div>';
+    }).join('');
+  }
+  el.innerHTML = h;
+}
+function sig(){ return state.phase + '|' + prompts(Date.now()).map(function(p){return p.t;}).join('|'); }
+function lastOf(type){ for(var i=state.events.length-1;i>=0;i--){ if(state.events[i].type===type) return state.events[i]; } return null; }
+function agoText(now){
+  var s = state, lr = lastOf('rhythm');
+  if(s.phase==='cpr' && s.rhythm && lr && lr.key!=='rosc') return 'checked ' + fmt(now-lr.t) + ' ago';
+  if(s.phase==='rosc' && lr) return 'for ' + fmt(now-lr.t);
+  return '';
+}
+function renderBanner(){
+  var s = state, lr = lastOf('rhythm'), key = '', name;
+  if(s.phase==='idle') name = 'Not started';
+  else if(s.phase==='rosc'){ key = 'rosc'; name = 'ROSC'; }
+  else if(s.phase==='ended'){ key = lr ? lr.key : ''; name = lr ? (lr.key==='rosc' ? 'ROSC' : RH[lr.key]) : 'None logged'; }
+  else { key = s.rhythm || ''; name = s.rhythm ? RH[s.rhythm] : 'Not yet checked'; }
+  var el = $('rb'); el.dataset.r = (key==='asystole') ? 'pea' : key;
+  el.innerHTML = '<span class="lab">'+(s.phase==='ended'?'Last rhythm':'Current rhythm')+'</span><b>'+esc(name)+'</b><span class="ago" id="rb-ago">'+agoText(Date.now())+'</span>';
+}
+function renderCode(){
+  renderBanner(); renderPrompts(); lastSig = sig();
+  var on = state.phase==='cpr', dis = on?'':' disabled';
+  $('rhythm').innerHTML = ['vf','pea','asystole'].map(function(r){
+    return '<button data-act="rhythm:'+r+'"'+dis+'>'+RH[r]+'</button>';
+  }).join('') + '<button class="rosc" data-act="rosc"'+dis+'>ROSC</button>';
+  var shocks = count('shock'), epiN = itemCount('epi'), ls = lastOf('shock');
+  $('pads').innerHTML =
+    '<div class="shockrow'+(state.needShock?' hot':'')+'"><div class="sl"><b>Shock delivered</b><span>'+(shocks?shocks+' so far'+(ls&&ls.j?', last '+ls.j+' J':''):'none yet')+'</span></div>'+
+    '<div class="en">'+[200,300,360].map(function(j){ return '<button data-act="shock:'+j+'"'+dis+'>'+j+' J</button>'; }).join('')+'</div></div>'+
+    '<button class="pad wide" data-act="give:epi"'+dis+'><b>Epinephrine 1 mg</b><span>'+(epiN?('x'+epiN+', last at '+fmt(lastT('epi')-state.startedAt)):'none given')+'</span></button>'+
+    '<button class="pad small" data-act="cycle"'+dis+'><b>Restart CPR cycle</b></button>'+
+    '<button class="pad small" data-act="tab:meds"><b>All meds and gtts</b></button>';
+  var st = $('status');
+  st.dataset.s = state.phase;
+  st.textContent = state.phase==='cpr' ? 'CPR' : state.phase==='rosc' ? 'ROSC' : state.phase==='ended' ? 'Ended' : 'Idle';
+}
+function causeState(k){ var v = state.causes[k]; return v===true ? 'p' : (v||''); }
+function renderCauses(){
+  $('causes').innerHTML = CAUSES.map(function(c){
+    var st = causeState(c.k);
+    return '<div class="card'+(st==='x'?' excl':st==='p'?' poss':'')+'"><div class="cause-h"><div><div class="n">'+esc(c.n)+'</div><div class="c">'+esc(c.c)+'</div></div></div>'+
+      '<div class="tri"><button class="chk po" data-act="cause:'+c.k+':p" aria-pressed="'+(st==='p')+'">Possible</button>'+
+      '<button class="chk ex" data-act="cause:'+c.k+':x" aria-pressed="'+(st==='x')+'">Excluded</button></div>'+
+      (st==='x' ? '' : (c.r?'<p class="rec"><b>Management:</b> '+esc(c.r)+'</p>':'')+(c.a.length?'<div class="chips">'+c.a.map(chip).join('')+'</div>':''))+'</div>';
+  }).join('');
+}
+function medRow(k,gname){
+  var it = ITEMS[k], n = itemCount(k), d = dose(k), gt = it.k==='gtt', run = gt && running(k);
+  return '<button class="row'+(run?' running':'')+'" data-act="give:'+k+'" data-q="'+esc((it.n+' '+it.w+' '+gname).toLowerCase())+'"><div><b>'+esc(it.n)+(gt?' infusion':'')+(d?' '+esc(d):'')+'</b>'+
+    (it.w?'<small>'+esc(it.w)+'</small>':'')+'</div>'+
+    (gt ? '<span class="cnt">'+(run?'Running<br>tap to stop':(n?'Stopped':'Start'))+'</span>' : (n?'<span class="cnt">x'+n+'<br>'+fmt(lastT(k)-state.startedAt)+'</span>':''))+'</button>';
+}
+function renderMeds(){
+  function sec(title,rows){ return '<div class="mg" style="display:flex;flex-direction:column;gap:8px">'+(title?'<div class="sec" style="margin-bottom:0">'+esc(title)+'</div>':'')+rows+'</div>'; }
+  var used = Object.keys(ITEMS).filter(function(k){ return itemCount(k)>0; }).sort(function(a,b){
+    var ra = ITEMS[a].k==='gtt' && running(a), rb = ITEMS[b].k==='gtt' && running(b);
+    return (rb-ra) || (lastT(b)-lastT(a));
+  });
+  var top = used.map(function(k){ return medRow(k,'given running'); }).join('') +
+    state.events.filter(function(e){ return e.type==='med' && !e.key; }).map(function(e){
+      return '<div class="row" data-q="'+esc(e.label.toLowerCase())+' custom"><div><b>'+esc(e.label)+'</b><small>Custom entry</small></div><span class="cnt">'+fmt(e.t-state.startedAt)+'</span></div>';
+    }).join('');
+  $('medlist').innerHTML = (top ? '<div class="hdr">Running and given</div>' + sec('', top) : '') + '<div class="hdr">All meds</div>' + GROUPS.map(function(g){
+    return sec(g[1], Object.keys(ITEMS).filter(function(k){return ITEMS[k].g===g[0];}).map(function(k){ return medRow(k,g[1]); }).join(''));
+  }).join('');
+  filterMeds();
+}
+function filterMeds(){
+  var raw = $('med-search').value.trim(), q = raw.toLowerCase(), ni = $('note-input'), hits = 0;
+  $('search-x').hidden = !q;
+  if(q && (!ni.value || autoName)){ ni.value = raw; autoName = true; }
+  else if(!q && autoName){ ni.value = ''; autoName = false; }
+  document.querySelectorAll('#medlist .mg').forEach(function(g){
+    var any = false;
+    g.querySelectorAll('.row').forEach(function(r){ var m = !q || r.dataset.q.indexOf(q)>=0; r.hidden = !m; if(m){ any = true; hits++; } });
+    g.hidden = !any;
+  });
+  document.querySelectorAll('#medlist .hdr').forEach(function(h){ h.hidden = !!q; });
+  $('nomatch').hidden = !(q && !hits);
+  $('nomatch-t').textContent = 'No listed med matches "' + raw + '"';
+}
+function renderLog(){
+  var ev = state.events.slice().reverse();
+  $('log').innerHTML = ev.length ? ev.map(function(e){
+    return '<li><span class="e">'+fmt(e.t-state.startedAt)+'</span><span class="l k-'+e.type+'">'+esc(e.label)+'<small>'+clock(e.t)+'</small></span>'+
+      (e.key==='start' ? '<span></span>' : '<button class="x" data-act="del:'+e.id+'" aria-label="Delete entry">&times;</button>')+'</li>';
+  }).join('') : '<li style="display:block"><p class="empty">Nothing logged yet. Start a code and every shock, drug, and rhythm check appears here with a timestamp.</p></li>';
+  $('pdf-btn').hidden = !window.jspdf || state.phase==='idle';
+  $('end-btn').hidden = !active(); $('end-btn2').hidden = !active(); $('reset-btn').hidden = state.phase==='idle';
+}
+function curSide(){ return state.phase==='cpr' ? (state.rhythm==='vf' ? 'vf' : state.rhythm ? 'pea' : '') : state.phase==='rosc' ? 'rosc' : ''; }
+function renderHere(){
+  var a = curSide();
+  function tg(id,c,v){ var el = $(id); if(el) el.classList.toggle(c, !!v); }
+  tg('band-vf','on',a==='vf'); tg('cur-vf','on',a==='vf'); tg('band-pea','on',a==='pea'); tg('cur-pea','on',a==='pea');
+  tg('g-vf','dim',a && a!=='vf'); tg('g-pea','dim',a && a!=='pea'); tg('box-rosc','here',a==='rosc');
+}
+function renderAll(){ renderCode(); renderCauses(); renderMeds(); renderLog(); renderHere(); tick(); }
+function showTab(t){
+  tab = t;
+  ['code','algo','causes','meds','log'].forEach(function(n){ $('v-'+n).hidden = n!==t; });
+  document.querySelectorAll('.tabs button').forEach(function(b){ b.setAttribute('aria-selected', String(b.dataset.act==='tab:'+t)); });
+}
+
+/* ---------- algorithm diagram (original layout, built as SVG) ---------- */
+var VW = 760, VH = 1080, zoom = 1;
+var SECS = {all:{x:0,y:0,z:1}, vf:{x:0,y:178,z:2.1}, pea:{x:402,y:178,z:2.1}, rosc:{x:24,y:900,z:1.6}};
+function buildAlgo(){
+  var o = [];
+  function tx(x,y,c,s,a,extra){ o.push('<text x="'+x+'" y="'+y+'" class="'+c+'" text-anchor="'+(a||'middle')+'"'+(extra||'')+'>'+esc(s)+'</text>'); }
+  function bx(x,y,w,h,c,lines,id,rx){
+    o.push('<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="'+(rx||12)+'" class="'+c+'"'+(id?' id="'+id+'"':'')+'/>');
+    var solid = (c==='n-vf'||c==='n-pea') ? ' on' : '', lh = 19, y0 = y + (h - lines.length*lh)/2 + 14;
+    lines.forEach(function(s,i){ tx(x+w/2, y0+i*lh, (i===0?'h':'b')+solid+(c==='n-shock'?' shk':''), s); });
+  }
+  function ln(pts,opt){ opt = opt||{};
+    o.push('<polyline points="'+pts+'" class="ln'+(opt.dash?' dash':'')+'" marker-end="url(#'+(opt.dash?'ahok':'ah')+')"'+(opt.both?' marker-start="url(#ahs)"':'')+'/>'); }
+  function panel(x,y,w,h,title,lines){
+    o.push('<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="12" class="n-panel"/>');
+    tx(x+14,y+26,'h',title,'start'); lines.forEach(function(s,i){ tx(x+14,y+50+i*19,'b',s,'start'); });
+  }
+  o.push('<svg viewBox="0 0 '+VW+' '+VH+'" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Adult cardiac arrest algorithm"><defs>'+
+    '<marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="ahf"/></marker>'+
+    '<marker id="ahs" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M10 0L0 5L10 10z" class="ahf"/></marker>'+
+    '<marker id="ahok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="ahok"/></marker></defs>');
+  o.push('<rect id="band-vf" class="band bvf" x="3" y="186" width="350" height="716" rx="16"/><rect id="band-pea" class="band bpea" x="407" y="186" width="350" height="540" rx="16"/>');
+  // start
+  bx(170,18,420,66,'n-start',['Cardiac arrest','Start CPR · Oxygen · Attach defibrillator']);
+  ln('380,84 380,108'); bx(250,110,260,44,'n-check',['Shockable rhythm?'],null,22);
+  ln('250,132 190,132 190,194'); tx(220,124,'lbl','Yes'); ln('510,132 570,132 570,194'); tx(540,124,'lbl','No');
+  // shockable loop
+  o.push('<g id="g-vf">'); bx(40,196,300,46,'n-vf',['VF / pVT'],'hdr-vf');
+  ln('190,242 190,262'); bx(110,264,160,40,'n-shock',['Shock']);
+  ln('190,304 190,322'); bx(40,324,300,66,'n-cpr',['CPR 2 min','IV/IO access']);
+  ln('190,390 190,408'); bx(90,410,200,40,'n-check',['Rhythm check'],null,20);
+  ln('190,450 190,468'); bx(110,470,160,40,'n-shock',['Shock']);
+  ln('190,510 190,528'); bx(40,530,300,104,'n-cpr',['CPR 2 min','Epinephrine 1 mg every 3 to 5 min','Consider advanced airway,','waveform capnography']);
+  ln('190,634 190,652'); bx(90,654,200,40,'n-check',['Rhythm check'],null,20);
+  ln('190,694 190,712'); bx(110,714,160,40,'n-shock',['Shock']);
+  ln('190,754 190,772'); bx(40,774,300,104,'n-cpr',['CPR 2 min','Amiodarone 300 mg or lidocaine','(second amiodarone dose 150 mg)','Treat reversible causes']);
+  ln('40,826 24,826 24,430 88,430'); tx(16,640,'lbl','VF / pVT persists: repeat','middle',' transform="rotate(-90 16 640)"');
+  tx(190,895,'cur cvf','CURRENT RHYTHM','middle',' id="cur-vf"'); o.push('</g>');
+  // non-shockable loop
+  o.push('<g id="g-pea">'); bx(420,196,300,46,'n-pea',['Asystole / PEA'],'hdr-pea');
+  ln('570,242 570,262'); bx(420,264,300,126,'n-cpr',['CPR 2 min','Epinephrine 1 mg as soon as possible,','then every 3 to 5 min','IV/IO access','Consider advanced airway']);
+  ln('570,390 570,408'); bx(470,410,200,40,'n-check',['Rhythm check'],null,20);
+  ln('570,450 570,468'); bx(420,470,300,66,'n-cpr',['CPR 2 min','Treat reversible causes (Hs and Ts)']);
+  ln('570,536 570,652'); bx(470,654,200,40,'n-check',['Rhythm check'],null,20);
+  ln('670,674 738,674 738,327 722,327'); tx(754,500,'lbl','Asystole / PEA persists: repeat','middle',' transform="rotate(-90 754 500)"');
+  tx(570,717,'cur cpea','CURRENT RHYTHM','middle',' id="cur-pea"'); o.push('</g>');
+  // cross links
+  ln('294,430 466,430',{both:true}); tx(380,421,'lbl','Rhythm changed?'); tx(380,447,'lbl','Switch sides');
+  ln('294,674 466,674',{both:true}); tx(380,665,'lbl','Rhythm changed?'); tx(380,691,'lbl','Switch sides');
+  ln('380,700 380,914',{dash:true}); tx(388,810,'lbl','pulse','start');
+  // ROSC
+  bx(40,918,680,126,'n-rosc',['ROSC: post-cardiac arrest care','Organized rhythm with a pulse at any rhythm check','12-lead ECG · SpO2 90 to 98% · MAP 65 or higher','Treat the cause · Cath lab if STEMI','Targeted temperature management: 32 to 37.5 °C'],'box-rosc');
+  tx(380,1066,'lbl','Original layout drawn from published adult cardiac arrest guidelines. Verify before clinical use.');
+  o.push('</svg>');
+  $('awrap').innerHTML = o.join('');
+}
+function setZoom(nz,cx,cy){
+  var w = $('awrap'), svg = w.firstElementChild; if(!svg) return;
+  var ow = w.clientWidth*zoom, oh = ow*VH/VW;
+  if(cx==null){ cx = w.clientWidth/2; cy = w.clientHeight/2; }
+  var rx = (w.scrollLeft+cx)/ow, ry = (w.scrollTop+cy)/oh;
+  zoom = Math.max(1, Math.min(4, nz)); svg.style.width = (zoom*100)+'%';
+  var nw = w.clientWidth*zoom; w.scrollLeft = rx*nw - cx; w.scrollTop = ry*nw*VH/VW - cy;
+}
+function jump(name){
+  var s = SECS[name], w = $('awrap'), svg = w.firstElementChild; if(!s || !svg) return;
+  zoom = s.z; svg.style.width = (zoom*100)+'%';
+  var k = w.clientWidth*zoom/VW; w.scrollLeft = s.x*k; w.scrollTop = s.y*k;
+}
+(function(){
+  var w = $('awrap'), pd = 0, pz = 1;
+  function dist(e){ var a = e.touches[0], b = e.touches[1]; return Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY); }
+  w.addEventListener('touchstart', function(e){ if(e.touches.length===2){ pd = dist(e); pz = zoom; } }, {passive:true});
+  w.addEventListener('touchmove', function(e){ if(e.touches.length===2 && pd){ e.preventDefault(); var r = w.getBoundingClientRect();
+    setZoom(pz*dist(e)/pd, (e.touches[0].clientX+e.touches[1].clientX)/2 - r.left, (e.touches[0].clientY+e.touches[1].clientY)/2 - r.top); } }, {passive:false});
+  w.addEventListener('touchend', function(e){ if(e.touches.length<2) pd = 0; }, {passive:true});
+  w.addEventListener('gesturestart', function(e){ e.preventDefault(); });
+})();
+
+/* ---------- clock ---------- */
+function tick(){
+  var now = Date.now(), s = state, on = s.phase==='cpr';
+  var end = s.phase==='ended' ? s.endedAt : now;
+  $('tv-total').textContent = s.phase==='idle' ? '0:00' : fmt(end - s.startedAt);
+  var tc = $('t-cycle'), cv = $('tv-cycle'), bar = $('tb-cycle');
+  if(on){
+    var cyc = now - s.cycleStart, left = CYCLE - cyc;
+    cv.textContent = left>=0 ? fmt(left + 999) : '+' + fmt(-left);
+    bar.style.width = Math.min(100, cyc/CYCLE*100) + '%';
+    tc.dataset.s = (left<=0 || s.needShock) ? 'crit' : left<=15000 ? 'warn' : '';
+    if(!s.needShock){
+      if(left<=15000 && left>0 && warnedFor!==s.cycleStart){ warnedFor = s.cycleStart; buzz([200]); }
+      if(left<=0 && dueFor!==s.cycleStart){ dueFor = s.cycleStart; buzz([400,150,400,150,400]); }
+    }
+  } else { cv.textContent = s.phase==='idle' ? '2:00' : '--:--'; bar.style.width = '0'; tc.dataset.s = ''; }
+  var te = $('t-epi'), le = lastT('epi');
+  if(le && s.phase!=='idle'){
+    var since = end - le; $('tv-epi').textContent = fmt(since);
+    te.dataset.s = !on ? '' : since>=EPI_LATE ? 'crit' : since>=EPI_DUE ? 'warn' : '';
+  } else { $('tv-epi').textContent = '--:--'; te.dataset.s = ''; }
+  document.querySelector('.app').dataset.alert = (on && (s.needShock || now - s.cycleStart >= CYCLE)) ? '1' : '';
+  var ra = $('rb-ago'); if(ra) ra.textContent = agoText(now);
+  if(on){ var g = sig(); if(g!==lastSig){ lastSig = g; renderPrompts(); } }
+}
+
+/* ---------- vibration, wake lock, toast ---------- */
+/* Vibration works on Android browsers only. iPhone web apps cannot vibrate; that needs the native build. */
+function buzz(p){ try{ if(navigator.vibrate) navigator.vibrate(p); }catch(e){} }
+function wake(){ try{ if(navigator.wakeLock && document.visibilityState==='visible' && active()){
+  navigator.wakeLock.request('screen').then(function(){}).catch(function(){}); } }catch(e){} }
+document.addEventListener('visibilitychange', function(){ wake(); tick(); });
+/* An undoable toast stays until the next action or until it is dismissed. Plain notices fade on their own. */
+function toast(msg,undoable){
+  $('toast-t').textContent = msg; $('toast-undo').hidden = !undoable; $('toast-x').hidden = !undoable; $('toast').hidden = false;
+  clearTimeout(toastTimer); if(!undoable) toastTimer = setTimeout(hideToast, 3000);
+}
+function hideToast(){ clearTimeout(toastTimer); $('toast').hidden = true; }
+function disarm(){ if(armed){ armed.textContent = armed.dataset.label; armed.classList.remove('armed'); armed = null; } clearTimeout(armTimer); }
+
+/* ---------- summary ---------- */
+function summary(){
+  var s = state, L = [];
+  if(s.phase==='idle') return 'No code recorded.';
+  L.push('CODE SUMMARY (prototype tool, verify against the official record)');
+  L.push('Start: ' + new Date(s.startedAt).toLocaleDateString() + ' ' + clock(s.startedAt));
+  if(s.endedAt) L.push('End: ' + clock(s.endedAt) + ' (' + s.outcome + ')');
+  L.push('Duration: ' + fmt((s.endedAt||Date.now()) - s.startedAt));
+  var rh = s.events.filter(function(e){return e.type==='rhythm';}).map(function(e){return e.label.replace('Rhythm: ','');});
+  if(rh.length) L.push('Rhythms: ' + rh.join(' > '));
+  L.push('Shocks: ' + count('shock'));
+  var tot = {}; s.events.forEach(function(e){ if(e.type==='med' && ITEMS[e.key]) tot[e.key] = (tot[e.key]||0)+1; });
+  var mk = Object.keys(tot); if(mk.length) L.push('Meds: ' + mk.map(function(k){return ITEMS[k].k==='gtt' ? ITEMS[k].n+' infusion' : ITEMS[k].n+' x'+tot[k];}).join(', '));
+  var cp = CAUSES.filter(function(c){return causeState(c.k)==='p';}).map(function(c){return c.n;});
+  var cx = CAUSES.filter(function(c){return causeState(c.k)==='x';}).map(function(c){return c.n;});
+  if(cp.length) L.push('Reversible causes considered possible: ' + cp.join('; '));
+  if(cx.length) L.push('Reversible causes excluded: ' + cx.join('; '));
+  L.push(''); L.push('Timeline:');
+  s.events.forEach(function(e){ L.push(clock(e.t) + '  [' + fmt(e.t-s.startedAt) + ']  ' + e.label); });
+  return L.join('\n');
+}
+
+function buildPdf(){
+  var doc = new window.jspdf.jsPDF({unit:'pt',format:'letter'}), s = state, x = 48, y = 60, W = 516;
+  function room(h){ if(y+h>744){ doc.addPage(); y = 60; } }
+  function line(t,size,style,gap){ doc.setFont('helvetica',style||'normal'); doc.setFontSize(size||10.5);
+    doc.splitTextToSize(String(t),W).forEach(function(l){ room(14); doc.text(l,x,y); y += (size||10.5)+3.5; }); y += gap||0; }
+  line('Code Summary',17,'bold',2);
+  line('Generated by Code Blue Companion (prototype). Verify against the official record.',9,'normal',10);
+  line('Patient / MRN: ______________________________   Location: ______________',10.5,'normal',10);
+  var parts = summary().split('\nTimeline:\n')[0].split('\n').slice(1);
+  parts.forEach(function(l){ if(l) line(l,10.5); });
+  y += 10; line('Timeline',12,'bold',2);
+  doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  s.events.forEach(function(e){
+    var ls = doc.splitTextToSize(e.label, W-120); room(13*ls.length);
+    doc.text(clock(e.t),x,y); doc.text(fmt(e.t-s.startedAt),x+62,y); doc.text(ls,x+120,y); y += 13*ls.length + 2;
+  });
+  return doc.output('arraybuffer');
+}
+function saveBlob(blob,name){
+  try{ var u = URL.createObjectURL(blob), a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(u); }, 60000); toast('PDF saved'); }catch(e){ toast('Could not save the PDF. Use Copy summary.'); }
+}
+function stamp(t){ var d = new Date(t), p = function(n){return (n<10?'0':'')+n;}; return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'-'+p(d.getHours())+p(d.getMinutes()); }
+
+/* ---------- actions (each one only adds or removes events; everything else is derived) ---------- */
+var A = {
+  start:function(){ mutate(function(){ var m = state.muted; state = fresh(); state.muted = m; state.startedAt = Date.now(); push('system','start','Code started, CPR in progress'); }); wake(); },
+  rhythm:function(r){ mutate(function(){ push('rhythm',r,'Rhythm: '+RH[r]); }, 'Rhythm: '+RH[r]); },
+  shock:function(j){ mutate(function(){ var e = push('shock','','Shock delivered'); if(j) e.j = Number(j); }, 'Shock'+(j?' '+j+' J':'')+' logged, CPR cycle restarted'); },
+  give:function(k){ if(!active()){ toast('Start a code to log'); return; }
+    var lab = labelFor(k); mutate(function(){ push('med',k,lab); }, 'Logged: '+lab); },
+  cycle:function(){ mutate(function(){ push('system','cycle','CPR cycle restarted'); }, 'CPR cycle restarted'); },
+  rosc:function(){ mutate(function(){ state.rosc = {}; push('rhythm','rosc','ROSC'); }, 'ROSC logged'); },
+  rearrest:function(){ mutate(function(){ push('system','rearrest','Re-arrest, CPR resumed'); }, 'Re-arrest logged'); },
+  rc:function(i){ mutate(function(){ if(state.rosc[i]) delete state.rosc[i]; else state.rosc[i] = true; }); },
+  cause:function(arg){ var i = arg.lastIndexOf(':'), k = arg.slice(0,i), v = arg.slice(i+1);
+    mutate(function(){ if(causeState(k)===v) delete state.causes[k]; else state.causes[k] = v; }); },
+  note:function(){ var i = $('note-input'), d = $('note-dose'), v = i.value.trim(), dv = d.value.trim(); if(!v){ toast('Enter a drug name'); i.focus(); return; }
+    if(!active()){ toast('Start a code to log'); return; }
+    var lab = v + (dv ? ' ' + dv + ' ' + $('note-unit').value : '');
+    mutate(function(){ push('med','',lab); }, 'Logged: '+lab); i.value = ''; d.value = ''; autoName = false; i.blur(); d.blur(); if($('med-search').value){ $('med-search').value = ''; filterMeds(); } },
+  agree:function(){ try{ localStorage.setItem('cbc-agreed-v1', String(Date.now())); }catch(e){} $('gate').hidden = true; },
+  tocustom:function(){ var d = $('note-dose'); d.scrollIntoView({block:'center'}); d.focus(); },
+  clearsearch:function(){ var q = $('med-search'); q.value = ''; filterMeds(); q.blur(); },
+  del:function(id){ mutate(function(){ state.events = state.events.filter(function(e){ return String(e.id)!==String(id); }); }, 'Entry deleted'); },
+  undo:function(){ if(!prev) return; try{ state = JSON.parse(prev); }catch(e){} prev = null; derive(); save(); renderAll(); toast('Undone. Prompts reverted.'); },
+  dismiss:function(){ hideToast(); },
+  end:function(outcome){ mutate(function(){ push('system','end','Code ended: '+outcome).o = outcome; }, 'Code ended'); },
+  reset:function(){ mutate(function(){ var m = state.muted; state = fresh(); state.muted = m; }, 'Cleared'); $('sum').hidden = true; showTab('code'); },
+  copy:function(){ var t = summary(), box = $('sum'); box.value = t; box.hidden = false;
+    var fb = function(){ box.focus(); box.select(); toast('Select and copy the text below'); };
+    try{ navigator.clipboard.writeText(t).then(function(){ toast('Summary copied'); }, fb); }catch(e){ fb(); } },
+  pdf:function(){ if(!window.jspdf){ toast('PDF export did not load. Use Copy summary.'); return; }
+    var data; try{ data = buildPdf(); }catch(e){ toast('Could not build the PDF. Use Copy summary.'); return; }
+    var name = 'code-summary-'+stamp(state.startedAt)+'.pdf', blob = new Blob([data],{type:'application/pdf'}), file = null;
+    try{ file = new File([blob], name, {type:'application/pdf'}); }catch(e){}
+    if(file && navigator.canShare && navigator.canShare({files:[file]})){
+      navigator.share({files:[file], title:'Code summary'}).then(function(){ toast('PDF shared'); }, function(err){
+        if(err && err.name==='AbortError') return; saveBlob(blob,name); });
+    } else saveBlob(blob,name); },
+  instlater:function(){ $('inst').hidden = true; },
+  tab:function(t){ showTab(t); if(t==='algo'){ var a = curSide(); if(a) jump(a); else setZoom(zoom); } },
+  zoom:function(d){ setZoom(zoom * (d==='+' ? 1.4 : 1/1.4)); },
+  sec:function(n){ jump(n); }
+};
+document.addEventListener('click', function(e){
+  var b = e.target.closest ? e.target.closest('[data-act]') : null; if(!b || b.disabled) return;
+  if(b.hasAttribute('data-confirm') && armed!==b){ disarm(); armed = b; b.dataset.label = b.textContent; b.textContent = 'Tap again to confirm'; b.classList.add('armed'); armTimer = setTimeout(disarm, 3500); return; }
+  disarm();
+  var act = b.dataset.act, i = act.indexOf(':'), name = i<0 ? act : act.slice(0,i), arg = i<0 ? '' : act.slice(i+1);
+  if(A[name]) A[name](arg);
+});
+$('note-input').addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); $('note-dose').focus(); } });
+$('note-dose').addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); A.note(); } });
+$('med-search').addEventListener('input', filterMeds);
+$('note-input').addEventListener('input', function(){ autoName = false; });
+
+/* ---------- boot ---------- */
+function boot(d){ if(d && d.state && d.state.events) state = Object.assign(fresh(), d.state); else load();
+  var ok = false; try{ ok = !!localStorage.getItem('cbc-agreed-v1'); }catch(e){} $('gate').hidden = ok;
+  derive(); buildAlgo(); renderAll(); showTab(tab); setInterval(tick, 250); wake(); }
+var standalone = window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+var ua = navigator.userAgent || '', isIOS = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1), isAndroid = /Android/.test(ua);
+if(!standalone && (isIOS || isAndroid)){ $('inst').hidden = false; $('inst-ios').hidden = !isIOS; $('inst-android').hidden = isIOS; }
+boot({});
+if('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost')){
+  window.addEventListener('load', function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); });
+}
+})();
+</script>
